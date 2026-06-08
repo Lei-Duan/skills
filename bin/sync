@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+#
+# Symlink every skill in engineering/ and personal/ into ~/.claude/skills/ so
+# they're available globally in Claude Code. Re-run after adding, renaming, or
+# deleting a skill (content edits are live automatically — they're symlinks).
+#
+# wip/ is intentionally NOT synced (it's scratch space).
+# Override the destination with: CLAUDE_SKILLS_DIR=/path bin/sync
+#
+set -euo pipefail
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+DEST="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
+SYNC_DIRS=(engineering personal)
+
+mkdir -p "$DEST"
+echo "syncing skills → $DEST"
+
+linked=0
+seen=" "
+
+for cat in "${SYNC_DIRS[@]}"; do
+  [ -d "$REPO/$cat" ] || continue
+  while IFS= read -r skill_md; do
+    skill_dir="$(cd "$(dirname "$skill_md")" && pwd)"
+    name="$(basename "$skill_dir")"
+    link="$DEST/$name"
+
+    case "$seen" in
+      *" $name "*)
+        echo "  ! collision: '$name' defined in two categories — skipping duplicate" >&2
+        continue ;;
+    esac
+    seen="$seen$name "
+
+    if [ -e "$link" ] && [ ! -L "$link" ]; then
+      echo "  ! '$name' already exists in $DEST as a real folder — skipping (won't clobber)" >&2
+      continue
+    fi
+
+    ln -sfn "$skill_dir" "$link"
+    echo "  → $name"
+    linked=$((linked + 1))
+  done < <(find "$REPO/$cat" -maxdepth 2 -name SKILL.md | sort)
+done
+
+# Prune our own stale symlinks (target deleted/renamed in the repo).
+pruned=0
+for link in "$DEST"/*; do
+  [ -L "$link" ] || continue
+  case "$(readlink "$link")" in
+    "$REPO"/*)
+      if [ ! -e "$link" ]; then
+        rm "$link"
+        echo "  ✗ pruned stale link: $(basename "$link")"
+        pruned=$((pruned + 1))
+      fi ;;
+  esac
+done
+
+echo "✓ linked $linked skill(s), pruned $pruned"

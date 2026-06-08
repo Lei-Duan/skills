@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+#
+# Scaffold a new skill from templates/skill-template/.
+# Usage: bin/new <category> <skill-name>
+#   category    : engineering | personal | wip
+#   skill-name  : lowercase letters, digits, hyphens
+#
+set -euo pipefail
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+cat="${1:-}"
+name="${2:-}"
+
+if [ -z "$cat" ] || [ -z "$name" ]; then
+  echo "usage: bin/new <category> <skill-name>"
+  echo "  category   : engineering | personal | wip"
+  echo "  skill-name : lowercase-with-hyphens"
+  exit 1
+fi
+
+case "$cat" in
+  engineering|personal|wip) ;;
+  *) echo "error: category must be engineering, personal, or wip" >&2; exit 1 ;;
+esac
+
+case "$name" in
+  *[!a-z0-9-]*|"") echo "error: name must be lowercase letters, digits, and hyphens only" >&2; exit 1 ;;
+esac
+
+dir="$REPO/$cat/$name"
+if [ -e "$dir" ]; then
+  echo "error: $cat/$name already exists" >&2
+  exit 1
+fi
+
+mkdir -p "$dir"
+sed "s/{{NAME}}/$name/g" "$REPO/templates/skill-template/SKILL.md" > "$dir/SKILL.md"
+
+echo "✓ created $cat/$name/SKILL.md"
+echo
+echo "next:"
+echo "  1. edit $cat/$name/SKILL.md"
+if [ "$cat" = "wip" ]; then
+  echo "  2. move it to engineering/ or personal/ when ready, then run: bin/sync"
+else
+  echo "  2. bin/sync                  # use it in Claude Code"
+  echo "     bin/package $cat/$name    # package it for claude.ai"
+fi
